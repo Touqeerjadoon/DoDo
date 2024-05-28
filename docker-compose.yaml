@@ -1,0 +1,43 @@
+name: dodo
+services:
+  db:
+    image: postgres:14
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: dodo
+      POSTGRES_USER: dodo_user
+      POSTGRES_PASSWORD: dodo_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "dodo"]
+      interval: 5s
+      timeout: 30s
+      retries: 3
+      start_period: 10s
+    networks:
+      - dodo_net
+
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=dodo
+      - DB_USER=dodo_user
+      - DB_PASSWORD=dodo_password
+      - DB_PORT=5432
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - dodo_net
+
+networks:
+  dodo_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
