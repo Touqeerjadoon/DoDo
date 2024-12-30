@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
       - develop
-      - main
   push:
     branches:
       - develop
@@ -13,36 +12,36 @@ jobs:
   test_and_build:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_DB: dodo
+          POSTGRES_USER: dodo_user
+          POSTGRES_PASSWORD: dodo_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Set up Docker Compose
+    - name: Check Docker Compose Version
       run: |
         docker compose version
 
-    - name: Start Services
-      run: |
-        docker compose up -d --build
-      env:
-        POSTGRES_DB: dodo
-        POSTGRES_USER: dodo_user
-        POSTGRES_PASSWORD: dodo_password
-
-    - name: Wait for PostgreSQL to be ready
-      run: |
-        for i in {1..10}; do
-          docker compose exec db pg_isready -U dodo_user -d dodo && break
-          sleep 5
-        done
-
     - name: Run Migrations
       run: |
-        docker compose exec web python manage.py migrate
+        python manage.py migrate
 
     - name: Run Tests
       run: |
-        docker compose exec web python manage.py test
+        python manage.py test
       continue-on-error: false
 
     - name: Send Slack Failure Notification
@@ -69,6 +68,11 @@ jobs:
       if: success()
       run: |
         docker push touqeerjadoon55/dodo:latest
+
+    - name: Remove Docker Image
+      if: success()
+      run: |
+        docker rmi touqeerjadoon55/dodo:latest
 
     - name: Send Slack Success Notification
       if: success()
