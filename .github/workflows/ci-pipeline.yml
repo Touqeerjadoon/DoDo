@@ -1,0 +1,95 @@
+name: CI Pipeline for DoDo
+
+on:
+  pull_request:
+    branches:
+      - develop
+  push:
+    branches:
+      - develop
+
+jobs:
+  test_and_build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_DB: dodo
+          POSTGRES_USER: dodo_user
+          POSTGRES_PASSWORD: dodo_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --username=dodo_user --dbname=dodo
+          --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Wait for PostgreSQL
+      run: |
+        for i in {1..10}; do
+          pg_isready -h localhost -p 5432 -U dodo_user && break
+          sleep 5
+        done
+
+    - name: Run Migrations
+      env:
+        DB_HOST: localhost
+        DB_NAME: dodo
+        DB_USER: dodo_user
+        DB_PASSWORD: dodo_password
+        DB_PORT: 5432
+      run: |
+        python manage.py makemigrations
+        python manage.py migrate
+
+    - name: Run Tests
+      id: test
+      run: |
+        python manage.py test || exit 1
+
+    - name: Send Slack Failure Notification
+      if: failure()
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: |
+        curl -X POST -H 'Content-type: application/json' --data '{"text":"Pipeline Failed: Tests failed."}' $SLACK_WEBHOOK_URL
+
+    - name: Build Docker Image
+      if: success()
+      run: |
+        docker build -t touqeerjadoon55/dodo:latest .
+
+    - name: Login to DockerHub
+      if: success()
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      run: |
+        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+    - name: Push Docker Image
+      if: success()
+      run: |
+        docker push touqeerjadoon55/dodo:latest
+
+    - name: Send Slack Success Notification
+      if: success()
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: |
+        curl -X POST -H 'Content-type: application/json' --data '{"text":"Pipeline Success: Image pushed to DockerHub."}' $SLACK_WEBHOOK_URL
