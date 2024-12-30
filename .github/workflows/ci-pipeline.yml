@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - develop
+      - main
   push:
     branches:
       - develop
@@ -76,11 +77,11 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"✅ CI Pipeline succeeded!"}' $SLACK_WEBHOOK_URL
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"CI Pipeline succeeded!"}' $SLACK_WEBHOOK_URL
 
       - name: Send Slack Notification on Failure
         if: failure()
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"❌ CI Pipeline failed!"}' $SLACK_WEBHOOK_URL
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"CI Pipeline failed!"}' $SLACK_WEBHOOK_URL
