@@ -22,27 +22,45 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd "pg_isready -U dodo_user -d dodo"
+          --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Check Docker Compose Version
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install Dependencies
       run: |
-        docker compose version
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
     - name: Run Migrations
+      env:
+        DB_HOST: localhost
+        DB_NAME: dodo
+        DB_USER: dodo_user
+        DB_PASSWORD: dodo_password
+        DB_PORT: 5432
       run: |
         python manage.py migrate
 
     - name: Run Tests
+      id: test
       run: |
-        python manage.py test
-      continue-on-error: false
+        python manage.py test || exit 1
 
     - name: Send Slack Failure Notification
       if: failure()
@@ -68,11 +86,6 @@ jobs:
       if: success()
       run: |
         docker push touqeerjadoon55/dodo:latest
-
-    - name: Remove Docker Image
-      if: success()
-      run: |
-        docker rmi touqeerjadoon55/dodo:latest
 
     - name: Send Slack Success Notification
       if: success()
